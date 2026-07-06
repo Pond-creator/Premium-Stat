@@ -18,6 +18,8 @@
   .nav a, .nav button { text-decoration: none; color: #cbd5e1; background: #1e293b; padding: 8px 16px; border-radius: 20px; font-size: 13px; font-family: inherit; border: none; cursor: pointer; }
   .nav a.active, .nav a:hover, .nav button:hover { background: #6366f1; color: #fff; }
   main { max-width: 1200px; margin: 24px auto; padding: 0 16px 60px; }
+  .kpi-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; font-size: 13px; color: #475569; }
+  .kpi-toolbar select { font-family: inherit; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; }
   .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
   .kpi { background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff; border-radius: 14px; padding: 18px 20px; }
   .kpi .label { font-size: 12px; opacity: .85; }
@@ -62,6 +64,10 @@
   </div>
 </header>
 <main>
+  <div class="kpi-toolbar">
+    <label for="kpiYearSel">สรุปข้อมูลปี:</label>
+    <select id="kpiYearSel" onchange="renderKpis()"></select>
+  </div>
   <div class="kpis" id="kpis"></div>
   <div id="reportCategories"></div>
 </main>
@@ -160,24 +166,33 @@ function fmt(v, cfg) {
   return Number(v).toLocaleString('th-TH', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
-function render() {
-  const years = yearsInData();
+function renderKpis() {
   const categories = [...new Set(CONFIG.map(c => c.category))];
-
-  // KPIs: headline "sum" metric per category, latest year
-  const latestYear = years[years.length - 1];
+  const year = Number(document.getElementById('kpiYearSel').value);
   const kpiEl = document.getElementById('kpis');
   kpiEl.innerHTML = '';
   categories.forEach(cat => {
     const headline = CONFIG.filter(c => c.category === cat && c.calc_type === 'sum')[0];
     if (!headline) return;
-    const v = valueFor(cat, headline.metric, latestYear);
-    const cmp = yoyCompare(cat, headline.metric, latestYear);
+    const v = valueFor(cat, headline.metric, year);
+    const cmp = yoyCompare(cat, headline.metric, year);
     const cmpHtml = cmp
       ? `<div class="kpi-cmp ${cmp.pct >= 0 ? 'up' : 'down'}">${cmp.pct >= 0 ? '▲' : '▼'} ${Math.abs(cmp.pct).toFixed(1)}% <span>${cmp.label}</span></div>`
       : '';
-    kpiEl.innerHTML += `<div class="kpi"><div class="label">${cat} · ${headline.metric} (${latestYear})</div><div class="value">${fmt(v, headline)}</div>${cmpHtml}</div>`;
+    kpiEl.innerHTML += `<div class="kpi"><div class="label">${cat} · ${headline.metric} (${year})</div><div class="value">${fmt(v, headline)}</div>${cmpHtml}</div>`;
   });
+}
+
+function render() {
+  const years = yearsInData();
+  const categories = [...new Set(CONFIG.map(c => c.category))];
+
+  const yearSel = document.getElementById('kpiYearSel');
+  const latestYear = years[years.length - 1];
+  const prevSelected = yearSel.value;
+  yearSel.innerHTML = years.slice().reverse().map(y => `<option value="${y}">${y}</option>`).join('');
+  yearSel.value = years.includes(Number(prevSelected)) ? prevSelected : latestYear;
+  renderKpis();
 
   const container = document.getElementById('reportCategories');
   container.innerHTML = '';

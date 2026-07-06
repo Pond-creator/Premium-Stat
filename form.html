@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>กรอกข้อมูล - Premium Stat</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: 'Kanit', sans-serif; background: #f1f5f9; color: #0f172a; }
+  header { background: #0f172a; color: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  .nav { display: flex; gap: 8px; flex-wrap: wrap; }
+  .nav a, .nav button { text-decoration: none; color: #cbd5e1; background: #1e293b; padding: 8px 16px; border-radius: 20px; font-size: 13px; font-family: inherit; border: none; cursor: pointer; }
+  .nav a.active, .nav a:hover, .nav button:hover { background: #6366f1; color: #fff; }
+  main { max-width: 1100px; margin: 24px auto; padding: 0 16px 60px; }
+  .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+  select, input[type=number] { font-family: inherit; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; }
+  .card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); overflow-x: auto; }
+  .card h2 { margin: 0 0 14px; font-size: 16px; color: #4338ca; }
+  table { border-collapse: collapse; width: 100%; min-width: 760px; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; font-size: 13px; text-align: center; }
+  th { color: #64748b; font-weight: 500; }
+  td:first-child, th:first-child { text-align: left; min-width: 160px; color: #0f172a; font-weight: 500; }
+  td input { width: 88px; padding: 6px 8px; border: 1px solid #e2e8f0; border-radius: 6px; text-align: right; font-family: inherit; }
+  td input:focus { outline: none; border-color: #6366f1; }
+  .save-bar { position: sticky; bottom: 0; background: #fff; padding: 14px; border-radius: 12px; box-shadow: 0 -2px 10px rgba(0,0,0,.08); text-align: right; }
+  .btn { padding: 10px 22px; border: none; border-radius: 8px; background: #6366f1; color: #fff; font-family: inherit; font-size: 14px; cursor: pointer; }
+  .btn:hover { background: #4f46e5; }
+  .btn.secondary { background: #e2e8f0; color: #334155; }
+  .status { font-size: 13px; color: #16a34a; margin-right: 12px; }
+  .add-metric { margin-top: 10px; }
+  .add-metric summary { cursor: pointer; color: #6366f1; font-size: 13px; }
+  .add-metric-form { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
+  .add-metric-form input, .add-metric-form select { padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📊 Premium Stat</h1>
+  <div class="nav">
+    <a href="index.html">รายงาน</a>
+    <a href="form.html" class="active">กรอกข้อมูล</a>
+    <button onclick="AUTH.logout()">ออกจากระบบ</button>
+  </div>
+</header>
+<main>
+  <div class="toolbar">
+    <label>ปี:</label>
+    <select id="yearSel"></select>
+    <span class="status" id="statusMsg"></span>
+  </div>
+  <div id="categories"></div>
+
+  <details class="add-metric">
+    <summary>+ เพิ่มหมวดหมู่ / metric ใหม่</summary>
+    <div class="card add-metric-form">
+      <input id="newCategory" placeholder="ชื่อหมวดหมู่ (เช่น TikTok)" list="catList">
+      <datalist id="catList"></datalist>
+      <input id="newMetric" placeholder="ชื่อ metric (เช่น ยอดวิว)">
+      <select id="newCalcType">
+        <option value="sum">รวม (sum)</option>
+        <option value="average">เฉลี่ย (average)</option>
+      </select>
+      <button class="btn" onclick="addMetric()">เพิ่ม</button>
+    </div>
+  </details>
+
+  <div class="save-bar">
+    <button class="btn" onclick="saveAll()">💾 บันทึกข้อมูล</button>
+  </div>
+</main>
+<script src="config.js"></script>
+<script>
+if (AUTH.guard()) init();
+
+let CONFIG = [], DATA = [];
+const MONTHS = MONTH_NAMES;
+
+async function init() {
+  const boot = await api('bootstrap');
+  CONFIG = boot.config;
+  DATA = boot.data;
+  const years = new Set(DATA.map(d => Number(d.year)));
+  const curYear = new Date().getFullYear();
+  years.add(curYear);
+  const sel = document.getElementById('yearSel');
+  [...years].sort((a, b) => b - a).forEach(y => {
+    const opt = document.createElement('option');
+    opt.value = y; opt.textContent = y + (y === curYear ? ' (ปีนี้)' : '');
+    sel.appendChild(opt);
+  });
+  sel.value = curYear;
+  sel.addEventListener('change', render);
+  document.getElementById('catList').innerHTML = [...new Set(CONFIG.map(c => c.category))]
+    .map(c => `<option value="${c}">`).join('');
+  render();
+}
+
+function render() {
+  const year = Number(document.getElementById('yearSel').value);
+  const inputMetrics = CONFIG.filter(c => c.calc_type !== 'ratio');
+  const byCat = {};
+  inputMetrics.forEach(c => { (byCat[c.category] = byCat[c.category] || []).push(c); });
+
+  const container = document.getElementById('categories');
+  container.innerHTML = '';
+  Object.entries(byCat).forEach(([cat, metrics]) => {
+    metrics.sort((a, b) => Number(a.sort_order) - Number(b.sort_order));
+    const card = document.createElement('div');
+    card.className = 'card';
+    let html = `<h2>${cat}</h2><table><thead><tr><th></th>${MONTHS.map(m => `<th>${m}</th>`).join('')}</tr></thead><tbody>`;
+    metrics.forEach(m => {
+      html += `<tr><td>${m.metric}</td>`;
+      for (let mo = 1; mo <= 12; mo++) {
+        const existing = DATA.find(d => Number(d.year) === year && Number(d.month) === mo && d.category === cat && d.metric === m.metric);
+        const val = existing ? existing.value : '';
+        html += `<td><input type="number" step="any" data-cat="${cat}" data-metric="${m.metric}" data-month="${mo}" value="${val}"></td>`;
+      }
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    card.innerHTML = html;
+    container.appendChild(card);
+  });
+}
+
+async function saveAll() {
+  const year = Number(document.getElementById('yearSel').value);
+  const byMonth = {};
+  document.querySelectorAll('#categories input').forEach(inp => {
+    const month = Number(inp.dataset.month);
+    if (inp.value === '') return;
+    (byMonth[month] = byMonth[month] || []).push({ category: inp.dataset.cat, metric: inp.dataset.metric, value: inp.value });
+  });
+  const statusEl = document.getElementById('statusMsg');
+  statusEl.textContent = 'กำลังบันทึก...';
+  try {
+    for (const month of Object.keys(byMonth)) {
+      await api('saveMonth', { year, month: Number(month), entries: byMonth[month] });
+    }
+    statusEl.textContent = '✓ บันทึกแล้ว ' + new Date().toLocaleTimeString('th-TH');
+    const boot = await api('bootstrap');
+    CONFIG = boot.config; DATA = boot.data;
+  } catch (ex) {
+    statusEl.style.color = '#dc2626';
+    statusEl.textContent = 'เกิดข้อผิดพลาด: ' + ex.message;
+  }
+}
+
+async function addMetric() {
+  const category = document.getElementById('newCategory').value.trim();
+  const metric = document.getElementById('newMetric').value.trim();
+  const calc_type = document.getElementById('newCalcType').value;
+  if (!category || !metric) return alert('กรอกชื่อหมวดหมู่และ metric ให้ครบ');
+  try {
+    await api('addMetric', { category, metric, calc_type });
+    const boot = await api('bootstrap');
+    CONFIG = boot.config; DATA = boot.data;
+    document.getElementById('catList').innerHTML = [...new Set(CONFIG.map(c => c.category))]
+      .map(c => `<option value="${c}">`).join('');
+    document.getElementById('newCategory').value = '';
+    document.getElementById('newMetric').value = '';
+    render();
+  } catch (ex) {
+    alert('เกิดข้อผิดพลาด: ' + ex.message);
+  }
+}
+</script>
+</body>
+</html>

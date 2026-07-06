@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>รายงาน - Premium Stat</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: 'Kanit', sans-serif; background: #f1f5f9; color: #0f172a; }
+  header { background: #0f172a; color: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  .nav { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .nav a, .nav button { text-decoration: none; color: #cbd5e1; background: #1e293b; padding: 8px 16px; border-radius: 20px; font-size: 13px; font-family: inherit; border: none; cursor: pointer; }
+  .nav a.active, .nav a:hover, .nav button:hover { background: #6366f1; color: #fff; }
+  main { max-width: 1200px; margin: 24px auto; padding: 0 16px 60px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .kpi { background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff; border-radius: 14px; padding: 18px 20px; }
+  .kpi .label { font-size: 12px; opacity: .85; }
+  .kpi .value { font-size: 24px; font-weight: 600; margin-top: 4px; }
+  .kpi-cmp { margin-top: 8px; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .kpi-cmp.up { color: #bbf7d0; }
+  .kpi-cmp.down { color: #fecaca; }
+  .kpi-cmp span { font-weight: 400; opacity: .85; }
+  .card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 22px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
+  .card-head h2 { margin: 0; font-size: 17px; color: #4338ca; }
+  select { font-family: inherit; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; }
+  .table-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; min-width: 640px; }
+  th, td { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; font-size: 13px; text-align: right; }
+  th { color: #64748b; font-weight: 500; }
+  td:first-child, th:first-child { text-align: left; color: #0f172a; font-weight: 500; }
+  .chart-box { height: 260px; margin-top: 6px; }
+  .toggle-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 4px; }
+  .toggle-pill { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 16px; border: 1.5px solid var(--c, #cbd5e1); background: #fff; font-family: inherit; font-size: 12px; cursor: pointer; color: var(--c, #94a3b8); transition: all .15s; }
+  .toggle-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .toggle-pill.on { color: #fff; background: var(--c, #6366f1); }
+  .btn { padding: 9px 18px; border: none; border-radius: 8px; background: #6366f1; color: #fff; font-family: inherit; font-size: 13px; cursor: pointer; }
+  .btn.ghost { background: #f1f5f9; color: #334155; }
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,.5); align-items: center; justify-content: center; z-index: 50; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: #fff; border-radius: 14px; padding: 24px; width: 380px; max-height: 80vh; overflow-y: auto; }
+  .modal h3 { margin-top: 0; }
+  .modal input, .modal select { width: 100%; padding: 9px 10px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 10px; font-family: inherit; font-size: 13px; }
+  .user-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+  .badge { font-size: 11px; background: #e0e7ff; color: #4338ca; padding: 2px 8px; border-radius: 10px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📊 Premium Stat</h1>
+  <div class="nav">
+    <a href="index.html" class="active">รายงาน</a>
+    <a href="form.html">กรอกข้อมูล</a>
+    <button id="settingsBtn" style="display:none">⚙️ ตั้งค่า</button>
+    <button onclick="AUTH.logout()">ออกจากระบบ</button>
+  </div>
+</header>
+<main>
+  <div class="kpis" id="kpis"></div>
+  <div id="reportCategories"></div>
+</main>
+
+<div class="modal-overlay" id="userModal">
+  <div class="modal">
+    <h3>จัดการผู้ใช้งาน</h3>
+    <div id="userList"></div>
+    <hr>
+    <input id="uUsername" placeholder="ชื่อผู้ใช้">
+    <input id="uName" placeholder="ชื่อที่แสดง">
+    <input id="uPassword" placeholder="รหัสผ่าน (เว้นว่าง = ไม่เปลี่ยน)" type="password">
+    <select id="uRole">
+      <option value="viewer">viewer (ดูอย่างเดียว)</option>
+      <option value="editor">editor (กรอกข้อมูลได้)</option>
+      <option value="admin">admin (จัดการทั้งหมด)</option>
+    </select>
+    <div style="display:flex; gap:8px; justify-content:flex-end;">
+      <button class="btn ghost" onclick="closeUserModal()">ปิด</button>
+      <button class="btn" onclick="saveUserForm()">บันทึกผู้ใช้</button>
+    </div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script>
+if (AUTH.guard()) init();
+let CONFIG = [], DATA = [], CHARTS = {};
+
+async function init() {
+  const boot = await api('bootstrap');
+  CONFIG = boot.config;
+  DATA = boot.data;
+  if (boot.role === 'admin') {
+    document.getElementById('settingsBtn').style.display = '';
+    document.getElementById('settingsBtn').onclick = openUserModal;
+  }
+  render();
+}
+
+function yearsInData() {
+  return [...new Set(DATA.map(d => Number(d.year)))].sort((a, b) => a - b);
+}
+
+function valueFor(category, metric, year) {
+  const cfg = CONFIG.find(c => c.category === category && c.metric === metric);
+  if (!cfg) return null;
+  if (cfg.calc_type === 'ratio') {
+    const num = valueFor(category, cfg.numerator, year);
+    const den = cfg.denominator ? valueFor(category, cfg.denominator, year) : 1;
+    const div = Number(cfg.divisor) || 1;
+    if (num === null) return null;
+    return num / ((den || 1) * div);
+  }
+  const rows = DATA.filter(d => d.category === category && d.metric === metric && Number(d.year) === year);
+  const monthly = rows.filter(r => Number(r.month) > 0);
+  if (monthly.length) {
+    const vals = monthly.map(r => Number(r.value));
+    return cfg.calc_type === 'average' ? vals.reduce((a, b) => a + b, 0) / vals.length : vals.reduce((a, b) => a + b, 0);
+  }
+  const yearly = rows.find(r => Number(r.month) === 0);
+  return yearly ? Number(yearly.value) : null;
+}
+
+function monthsPresent(category, metric, year) {
+  return [...new Set(DATA.filter(d => d.category === category && d.metric === metric && Number(d.year) === year && Number(d.month) > 0).map(d => Number(d.month)))];
+}
+
+function periodValue(category, metric, year, months) {
+  const cfg = CONFIG.find(c => c.category === category && c.metric === metric);
+  const rows = DATA.filter(d => d.category === category && d.metric === metric && Number(d.year) === year && months.includes(Number(d.month)));
+  if (!rows.length) return null;
+  const vals = rows.map(r => Number(r.value));
+  return cfg.calc_type === 'average' ? vals.reduce((a, b) => a + b, 0) / vals.length : vals.reduce((a, b) => a + b, 0);
+}
+
+function yoyCompare(category, metric, year) {
+  const months = monthsPresent(category, metric, year);
+  const curVal = valueFor(category, metric, year);
+  if (curVal === null) return null;
+  let prevVal, label;
+  if (months.length) {
+    prevVal = periodValue(category, metric, year - 1, months);
+    label = `${months.length} เดือนแรก เทียบปีก่อน`;
+  } else {
+    prevVal = valueFor(category, metric, year - 1);
+    label = 'เทียบปีก่อน (ทั้งปี)';
+  }
+  if (prevVal === null || prevVal === 0) return null;
+  return { pct: (curVal - prevVal) / prevVal * 100, label };
+}
+
+function fmt(v, cfg) {
+  if (v === null || v === undefined || isNaN(v)) return '-';
+  const decimals = (cfg && (cfg.calc_type === 'average' || cfg.calc_type === 'ratio')) ? 2 : 0;
+  return Number(v).toLocaleString('th-TH', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+
+function render() {
+  const years = yearsInData();
+  const categories = [...new Set(CONFIG.map(c => c.category))];
+
+  // KPIs: headline "sum" metric per category, latest year
+  const latestYear = years[years.length - 1];
+  const kpiEl = document.getElementById('kpis');
+  kpiEl.innerHTML = '';
+  categories.forEach(cat => {
+    const headline = CONFIG.filter(c => c.category === cat && c.calc_type === 'sum')[0];
+    if (!headline) return;
+    const v = valueFor(cat, headline.metric, latestYear);
+    const cmp = yoyCompare(cat, headline.metric, latestYear);
+    const cmpHtml = cmp
+      ? `<div class="kpi-cmp ${cmp.pct >= 0 ? 'up' : 'down'}">${cmp.pct >= 0 ? '▲' : '▼'} ${Math.abs(cmp.pct).toFixed(1)}% <span>${cmp.label}</span></div>`
+      : '';
+    kpiEl.innerHTML += `<div class="kpi"><div class="label">${cat} · ${headline.metric} (${latestYear})</div><div class="value">${fmt(v, headline)}</div>${cmpHtml}</div>`;
+  });
+
+  const container = document.getElementById('reportCategories');
+  container.innerHTML = '';
+  categories.forEach((cat, ci) => {
+    const metrics = CONFIG.filter(c => c.category === cat).sort((a, b) => Number(a.sort_order) - Number(b.sort_order));
+    const chartMetrics = metrics.filter(m => m.calc_type !== 'ratio');
+    const chartId = 'chart_' + ci;
+    let html = `<div class="card"><div class="card-head"><h2>${cat}</h2>
+      <button class="btn ghost" onclick="exportXLSX('${cat}-report.xlsx', document.getElementById('table_${ci}'))">📥 Export</button>
+      </div>
+      <div class="table-wrap"><table id="table_${ci}"><thead><tr><th>Metric</th>${years.map(y => `<th>${y}</th>`).join('')}</tr></thead><tbody>`;
+    metrics.forEach(m => {
+      html += `<tr><td>${m.metric}</td>${years.map(y => `<td>${fmt(valueFor(cat, m.metric, y), m)}</td>`).join('')}</tr>`;
+    });
+    html += `</tbody></table></div>
+      <div class="toggle-row" id="toggles_${ci}">
+        ${chartMetrics.map((m, mi) => `<button class="toggle-pill on" style="--c:${CHART_COLORS[mi % CHART_COLORS.length]}" data-chart="${chartId}" data-idx="${mi}" onclick="toggleSeries(this)"><span class="dot"></span>${m.metric}</button>`).join('')}
+      </div>
+      <div class="chart-box"><canvas id="${chartId}"></canvas></div></div>`;
+    container.innerHTML += html;
+  });
+
+  categories.forEach((cat, ci) => drawChart('chart_' + ci, cat));
+}
+
+const CHART_COLORS = ['#6366f1', '#f97316', '#10b981', '#ef4444', '#0ea5e9', '#a855f7'];
+const RIGHT_AXIS_KEYWORDS = ['ค่าใช้จ่าย', 'เฉลี่ย'];
+
+function drawChart(chartId, cat) {
+  const years = yearsInData();
+  const metrics = CONFIG.filter(c => c.category === cat && c.calc_type !== 'ratio').sort((a, b) => Number(a.sort_order) - Number(b.sort_order));
+  const ctx = document.getElementById(chartId);
+  if (CHARTS[chartId]) CHARTS[chartId].destroy();
+  const datasets = metrics.map((m, mi) => {
+    const color = CHART_COLORS[mi % CHART_COLORS.length];
+    const isRight = RIGHT_AXIS_KEYWORDS.some(k => m.metric.includes(k));
+    return {
+      label: m.metric, data: years.map(y => valueFor(cat, m.metric, y)),
+      borderColor: color, backgroundColor: color + '22',
+      yAxisID: isRight ? 'y1' : 'y',
+      fill: false, tension: .35, pointRadius: 3, pointBackgroundColor: color
+    };
+  });
+  CHARTS[chartId] = new Chart(ctx, {
+    type: 'line',
+    data: { labels: years, datasets },
+    options: {
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, position: 'left' },
+        y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false } }
+      }
+    }
+  });
+}
+
+function toggleSeries(btn) {
+  const chartId = btn.dataset.chart;
+  const idx = Number(btn.dataset.idx);
+  const chart = CHARTS[chartId];
+  const meta = chart.getDatasetMeta(idx);
+  meta.hidden = meta.hidden === null ? !chart.data.datasets[idx].hidden : !meta.hidden;
+  btn.classList.toggle('on', !meta.hidden);
+  chart.update();
+}
+
+// ---- user management ----
+function openUserModal() {
+  document.getElementById('userModal').classList.add('open');
+  refreshUserList();
+}
+function closeUserModal() {
+  document.getElementById('userModal').classList.remove('open');
+}
+async function refreshUserList() {
+  const res = await api('listUsers');
+  document.getElementById('userList').innerHTML = res.users.map(u =>
+    `<div class="user-row"><span>${u.name} (${u.username})</span><span class="badge">${u.role}</span></div>`
+  ).join('') || '<p style="color:#94a3b8;font-size:13px">ยังไม่มีผู้ใช้</p>';
+}
+async function saveUserForm() {
+  const payload = {
+    username: document.getElementById('uUsername').value.trim(),
+    name: document.getElementById('uName').value.trim(),
+    password: document.getElementById('uPassword').value,
+    role: document.getElementById('uRole').value
+  };
+  if (!payload.username) return alert('กรอกชื่อผู้ใช้');
+  try {
+    await api('saveUser', payload);
+    document.getElementById('uUsername').value = '';
+    document.getElementById('uName').value = '';
+    document.getElementById('uPassword').value = '';
+    refreshUserList();
+  } catch (ex) { alert(ex.message); }
+}
+</script>
+</body>
+</html>

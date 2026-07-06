@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เข้าสู่ระบบ - Premium Stat</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    font-family: 'Kanit', sans-serif;
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  }
+  .card {
+    background: #fff; border-radius: 16px; padding: 40px 36px; width: 340px;
+    box-shadow: 0 20px 50px rgba(0,0,0,.35);
+  }
+  .card h1 { font-size: 22px; margin: 0 0 4px; color: #0f172a; font-weight: 600; }
+  .card p.sub { margin: 0 0 24px; color: #64748b; font-size: 14px; }
+  label { display: block; font-size: 13px; color: #334155; margin-bottom: 6px; font-weight: 500; }
+  input { width: 100%; padding: 11px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-family: inherit; font-size: 14px; margin-bottom: 16px; }
+  input:focus { outline: none; border-color: #6366f1; }
+  button {
+    width: 100%; padding: 12px; border: none; border-radius: 8px; background: #6366f1; color: #fff;
+    font-family: inherit; font-size: 15px; font-weight: 500; cursor: pointer; transition: background .15s;
+  }
+  button:hover { background: #4f46e5; }
+  button:disabled { opacity: .6; cursor: not-allowed; }
+  .err { color: #dc2626; font-size: 13px; margin: -8px 0 16px; display: none; }
+  .logo { text-align: center; margin-bottom: 20px; font-size: 32px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">📊</div>
+    <h1>Premium Stat</h1>
+    <p class="sub">เข้าสู่ระบบเพื่อดูรายงาน / กรอกข้อมูล</p>
+    <div class="err" id="err"></div>
+    <form id="loginForm">
+      <label>ชื่อผู้ใช้</label>
+      <input type="text" id="username" autocomplete="username" required>
+      <label>รหัสผ่าน</label>
+      <input type="password" id="password" autocomplete="current-password" required>
+      <button type="submit" id="btn">เข้าสู่ระบบ</button>
+    </form>
+    <p style="text-align:center; margin: 16px 0 0; display:none;" id="setupLinkWrap">
+      <a href="#" id="setupLink" style="color:#6366f1; font-size:13px; text-decoration:none;">ตั้งค่าครั้งแรก (สร้างผู้ดูแลระบบ)</a>
+    </p>
+    <form id="setupForm" style="display:none; margin-top:14px;">
+      <label>ชื่อผู้ใช้ admin</label>
+      <input type="text" id="setupUsername" required>
+      <label>ชื่อที่แสดง</label>
+      <input type="text" id="setupName">
+      <label>รหัสผ่าน</label>
+      <input type="password" id="setupPassword" required>
+      <button type="submit" id="setupBtn">สร้างผู้ดูแลระบบ</button>
+    </form>
+  </div>
+<script src="config.js"></script>
+<script>
+(async () => {
+  try {
+    const res = await fetch(API_URL + '?action=setupStatus');
+    const data = await res.json();
+    if (data.ok && data.needed) document.getElementById('setupLinkWrap').style.display = '';
+  } catch (ex) { /* keep hidden if status check fails */ }
+})();
+
+document.getElementById('setupLink').addEventListener('click', (e) => {
+  e.preventDefault();
+  const f = document.getElementById('setupForm');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+});
+
+document.getElementById('setupForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('setupBtn');
+  const err = document.getElementById('err');
+  err.style.display = 'none';
+  btn.disabled = true; btn.textContent = 'กำลังสร้าง...';
+  try {
+    const body = new URLSearchParams();
+    body.set('action', 'setupAdmin');
+    body.set('payload', JSON.stringify({
+      username: document.getElementById('setupUsername').value.trim(),
+      name: document.getElementById('setupName').value.trim(),
+      password: document.getElementById('setupPassword').value
+    }));
+    const res = await fetch(API_URL, { method: 'POST', body });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'สร้างผู้ดูแลระบบไม่สำเร็จ');
+    alert('สร้างผู้ดูแลระบบสำเร็จ กรุณาเข้าสู่ระบบ');
+    document.getElementById('setupForm').style.display = 'none';
+    document.getElementById('username').value = document.getElementById('setupUsername').value;
+  } catch (ex) {
+    err.textContent = ex.message;
+    err.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'สร้างผู้ดูแลระบบ';
+  }
+});
+
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('btn');
+  const err = document.getElementById('err');
+  err.style.display = 'none';
+  btn.disabled = true; btn.textContent = 'กำลังเข้าสู่ระบบ...';
+  try {
+    const body = new URLSearchParams();
+    body.set('action', 'login');
+    body.set('username', document.getElementById('username').value.trim());
+    body.set('password', document.getElementById('password').value);
+    const res = await fetch(API_URL, { method: 'POST', body });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'เข้าสู่ระบบไม่สำเร็จ');
+    AUTH.setSession(data.token, data.role, data.name);
+    location.href = 'index.html';
+  } catch (ex) {
+    err.textContent = ex.message;
+    err.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ';
+  }
+});
+</script>
+</body>
+</html>

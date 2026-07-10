@@ -38,6 +38,10 @@
   th { color: #64748b; font-weight: 500; }
   td:first-child, th:first-child { text-align: left; color: #0f172a; font-weight: 500; }
   .chart-box { height: 260px; margin-top: 6px; }
+  .monthly-section { margin-top: 22px; padding-top: 18px; border-top: 1px dashed #e2e8f0; }
+  .monthly-title { margin: 0; font-size: 14px; color: #64748b; font-weight: 500; }
+  .monthly-title span { color: #4338ca; font-weight: 600; }
+  .no-monthly { color: #94a3b8; font-size: 13px; margin: 8px 0 0; }
   .toggle-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 4px; }
   .toggle-pill { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 16px; border: 1.5px solid var(--c, #cbd5e1); background: #fff; font-family: inherit; font-size: 12px; cursor: pointer; color: var(--c, #94a3b8); transition: all .15s; }
   .toggle-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
@@ -66,7 +70,7 @@
 <main>
   <div class="kpi-toolbar">
     <label for="kpiYearSel">สรุปข้อมูลปี:</label>
-    <select id="kpiYearSel" onchange="renderKpis()"></select>
+    <select id="kpiYearSel" onchange="renderKpis(); renderMonthlyAll();"></select>
   </div>
   <div class="kpis" id="kpis"></div>
   <div id="reportCategories"></div>
@@ -211,11 +215,89 @@ function render() {
       <div class="toggle-row" id="toggles_${ci}">
         ${chartMetrics.map((m, mi) => `<button class="toggle-pill on" style="--c:${CHART_COLORS[mi % CHART_COLORS.length]}" data-chart="${chartId}" data-idx="${mi}" onclick="toggleSeries(this)"><span class="dot"></span>${m.metric}</button>`).join('')}
       </div>
-      <div class="chart-box"><canvas id="${chartId}"></canvas></div></div>`;
+      <div class="chart-box"><canvas id="${chartId}"></canvas></div>
+      <div class="monthly-section">
+        <div class="card-head"><h3 class="monthly-title">รายเดือน ปี <span id="myear_${ci}"></span></h3></div>
+        <div id="mbody_${ci}"></div>
+      </div>
+      </div>`;
     container.innerHTML += html;
   });
 
   categories.forEach((cat, ci) => drawChart('chart_' + ci, cat));
+  renderMonthlyAll();
+}
+
+function monthlyRawValue(category, metric, year, month) {
+  const cfg = CONFIG.find(c => c.category === category && c.metric === metric);
+  if (!cfg) return null;
+  if (cfg.calc_type === 'ratio') {
+    const num = monthlyRawValue(category, cfg.numerator, year, month);
+    const den = cfg.denominator ? monthlyRawValue(category, cfg.denominator, year, month) : 1;
+    const div = Number(cfg.divisor) || 1;
+    if (num === null) return null;
+    return num / ((den || 1) * div);
+  }
+  const row = DATA.find(d => d.category === category && d.metric === metric && Number(d.year) === year && Number(d.month) === month);
+  return row ? Number(row.value) : null;
+}
+
+function renderMonthlyAll() {
+  const year = Number(document.getElementById('kpiYearSel').value);
+  const categories = [...new Set(CONFIG.map(c => c.category))];
+  categories.forEach((cat, ci) => renderMonthlyForCategory(cat, ci, year));
+}
+
+function renderMonthlyForCategory(cat, ci, year) {
+  document.getElementById(`myear_${ci}`).textContent = year;
+  const metrics = CONFIG.filter(c => c.category === cat).sort((a, b) => Number(a.sort_order) - Number(b.sort_order));
+  const chartMetrics = metrics.filter(m => m.calc_type !== 'ratio');
+  const hasData = metrics.some(m => MONTH_NAMES.some((_, mi) => monthlyRawValue(cat, m.metric, year, mi + 1) !== null));
+  const body = document.getElementById(`mbody_${ci}`);
+  if (!hasData) {
+    body.innerHTML = `<p class="no-monthly">ปี ${year} มีแค่ยอดรวมทั้งปี ไม่มีข้อมูลรายเดือนให้แสดง</p>`;
+    return;
+  }
+  const mChartId = 'mchart_' + ci;
+  let html = `<div class="table-wrap"><table id="mtable_${ci}"><thead><tr><th>Metric</th>${MONTH_NAMES.map(m => `<th>${m}</th>`).join('')}</tr></thead><tbody>`;
+  metrics.forEach(m => {
+    html += `<tr><td>${m.metric}</td>${MONTH_NAMES.map((_, mi) => `<td>${fmt(monthlyRawValue(cat, m.metric, year, mi + 1), m)}</td>`).join('')}</tr>`;
+  });
+  html += `</tbody></table></div>
+    <div class="toggle-row" id="mtoggles_${ci}">
+      ${chartMetrics.map((m, mi) => `<button class="toggle-pill on" style="--c:${CHART_COLORS[mi % CHART_COLORS.length]}" data-chart="${mChartId}" data-idx="${mi}" onclick="toggleSeries(this)"><span class="dot"></span>${m.metric}</button>`).join('')}
+    </div>
+    <div class="chart-box"><canvas id="${mChartId}"></canvas></div>`;
+  body.innerHTML = html;
+  drawMonthlyChart(mChartId, cat, year);
+}
+
+function drawMonthlyChart(chartId, cat, year) {
+  const metrics = CONFIG.filter(c => c.category === cat && c.calc_type !== 'ratio').sort((a, b) => Number(a.sort_order) - Number(b.sort_order));
+  const ctx = document.getElementById(chartId);
+  if (CHARTS[chartId]) CHARTS[chartId].destroy();
+  const datasets = metrics.map((m, mi) => {
+    const color = CHART_COLORS[mi % CHART_COLORS.length];
+    const isRight = RIGHT_AXIS_KEYWORDS.some(k => m.metric.includes(k));
+    return {
+      label: m.metric, data: MONTH_NAMES.map((_, i) => monthlyRawValue(cat, m.metric, year, i + 1)),
+      borderColor: color, backgroundColor: color + '22',
+      yAxisID: isRight ? 'y1' : 'y',
+      fill: false, tension: .35, pointRadius: 3, pointBackgroundColor: color
+    };
+  });
+  CHARTS[chartId] = new Chart(ctx, {
+    type: 'line',
+    data: { labels: MONTH_NAMES, datasets },
+    options: {
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, position: 'left' },
+        y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false } }
+      }
+    }
+  });
 }
 
 const CHART_COLORS = ['#6366f1', '#f97316', '#10b981', '#ef4444', '#0ea5e9', '#a855f7'];

@@ -38,10 +38,12 @@
   th { color: #64748b; font-weight: 500; }
   td:first-child, th:first-child { text-align: left; color: #0f172a; font-weight: 500; }
   .chart-box { height: 260px; margin-top: 6px; }
-  .monthly-section { margin-top: 22px; padding-top: 18px; border-top: 1px dashed #e2e8f0; }
-  .monthly-title { margin: 0; font-size: 14px; color: #64748b; font-weight: 500; }
-  .monthly-title span { color: #4338ca; font-weight: 600; }
-  .no-monthly { color: #94a3b8; font-size: 13px; margin: 8px 0 0; }
+  .monthly-section { margin-top: 24px; padding: 18px 18px 4px; background: #f5f3ff; border: 1px solid #e0e7ff; border-radius: 12px; }
+  .monthly-title { margin: 0; font-size: 15px; color: #4338ca; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .monthly-title .icon { font-size: 15px; }
+  .monthly-section table { background: #fff; border-radius: 8px; overflow: hidden; }
+  .monthly-section .toggle-pill { background: #fff; }
+  .no-monthly { color: #94a3b8; font-size: 13px; margin: 8px 0 12px; }
   .toggle-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 4px; }
   .toggle-pill { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 16px; border: 1.5px solid var(--c, #cbd5e1); background: #fff; font-family: inherit; font-size: 12px; cursor: pointer; color: var(--c, #94a3b8); transition: all .15s; }
   .toggle-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
@@ -217,7 +219,7 @@ function render() {
       </div>
       <div class="chart-box"><canvas id="${chartId}"></canvas></div>
       <div class="monthly-section">
-        <div class="card-head"><h3 class="monthly-title">รายเดือน ปี <span id="myear_${ci}"></span></h3></div>
+        <div class="card-head"><h3 class="monthly-title"><span class="icon">📅</span> รายเดือน ปี <span id="myear_${ci}"></span></h3></div>
         <div id="mbody_${ci}"></div>
       </div>
       </div>`;

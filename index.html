@@ -18,6 +18,9 @@
   .nav a, .nav button { text-decoration: none; color: #cbd5e1; background: #1e293b; padding: 8px 16px; border-radius: 20px; font-size: 13px; font-family: inherit; border: none; cursor: pointer; }
   .nav a.active, .nav a:hover, .nav button:hover { background: #6366f1; color: #fff; }
   main { max-width: 1200px; margin: 24px auto; padding: 0 16px 60px; }
+  .loading-box { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 100px 20px; color: #64748b; font-size: 14px; }
+  .spinner { width: 36px; height: 36px; border: 3px solid #e0e7ff; border-top-color: #6366f1; border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
   .kpi-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; font-size: 13px; color: #475569; }
   .kpi-toolbar select { font-family: inherit; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; }
   .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
@@ -70,12 +73,18 @@
   </div>
 </header>
 <main>
-  <div class="kpi-toolbar">
-    <label for="kpiYearSel">สรุปข้อมูลปี:</label>
-    <select id="kpiYearSel" onchange="renderKpis(); renderMonthlyAll();"></select>
+  <div class="loading-box" id="loadingBox">
+    <div class="spinner"></div>
+    <p id="loadingText">กำลังโหลดข้อมูล...</p>
   </div>
-  <div class="kpis" id="kpis"></div>
-  <div id="reportCategories"></div>
+  <div id="contentWrap" style="display:none;">
+    <div class="kpi-toolbar">
+      <label for="kpiYearSel">สรุปข้อมูลปี:</label>
+      <select id="kpiYearSel" onchange="renderKpis(); renderMonthlyAll();"></select>
+    </div>
+    <div class="kpis" id="kpis"></div>
+    <div id="reportCategories"></div>
+  </div>
 </main>
 
 <div class="modal-overlay" id="userModal">
@@ -104,14 +113,21 @@ if (AUTH.guard()) init();
 let CONFIG = [], DATA = [], CHARTS = {};
 
 async function init() {
-  const boot = await api('bootstrap');
-  CONFIG = boot.config;
-  DATA = boot.data;
-  if (boot.role === 'admin') {
-    document.getElementById('settingsBtn').style.display = '';
-    document.getElementById('settingsBtn').onclick = openUserModal;
+  try {
+    const boot = await api('bootstrap');
+    CONFIG = boot.config;
+    DATA = boot.data;
+    if (boot.role === 'admin') {
+      document.getElementById('settingsBtn').style.display = '';
+      document.getElementById('settingsBtn').onclick = openUserModal;
+    }
+    document.getElementById('loadingBox').style.display = 'none';
+    document.getElementById('contentWrap').style.display = '';
+    render();
+  } catch (ex) {
+    document.getElementById('loadingText').innerHTML =
+      `โหลดข้อมูลไม่สำเร็จ: ${ex.message}<br><button class="btn" style="margin-top:12px" onclick="location.reload()">ลองใหม่</button>`;
   }
-  render();
 }
 
 function yearsInData() {

@@ -31,7 +31,7 @@ const AUTH = {
 // Google Apps Script's /exec endpoint occasionally returns an HTML error page
 // instead of JSON (transient Google-side redirect flakiness). Retry a few
 // times with backoff before giving up, so users don't see a raw parse error.
-async function fetchJsonWithRetry(url, options, retries = 3, delayMs = 700) {
+async function fetchJsonWithRetry(url, options, retries = 5, delayMs = 1200) {
   let lastErr;
   for (let i = 0; i < retries; i++) {
     try {

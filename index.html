@@ -80,7 +80,7 @@
   <div id="contentWrap" style="display:none;">
     <div class="kpi-toolbar">
       <label for="kpiYearSel">สรุปข้อมูลปี:</label>
-      <select id="kpiYearSel" onchange="renderKpis(); renderMonthlyAll();"></select>
+      <select id="kpiYearSel" onchange="onYearChange()"></select>
     </div>
     <div class="kpis" id="kpis"></div>
     <div id="reportCategories"></div>
@@ -110,14 +110,26 @@
 <script src="config.js"></script>
 <script>
 if (AUTH.guard()) init();
-let CONFIG = [], DATA = [], CHARTS = {};
+let CONFIG = [], YEARS = [], CHARTS = {};
+let REPORT = { yearly: {}, monthly: {}, yoyPrev: {}, monthsCount: {}, year: 0 };
+
+// เก็บผลของแต่ละปีไว้ในหน่วยความจำ สลับปีที่เคยดูแล้วจะไม่ต้องโหลดซ้ำ
+const REPORT_CACHE = {};
+
+async function loadReport(year) {
+  if (REPORT_CACHE[year]) return REPORT_CACHE[year];
+  const res = await api('reportData', year ? { year } : {});
+  REPORT_CACHE[res.year] = res;
+  return res;
+}
 
 async function init() {
   try {
-    const boot = await api('bootstrap');
-    CONFIG = boot.config;
-    DATA = boot.data;
-    if (boot.role === 'admin') {
+    const res = await loadReport(0);       // 0 = ให้เซิร์ฟเวอร์เลือกปีล่าสุด
+    REPORT = res;
+    CONFIG = res.config;
+    YEARS = res.years.map(Number);
+    if (res.role === 'admin') {
       document.getElementById('settingsBtn').style.display = '';
       document.getElementById('settingsBtn').onclick = openUserModal;
     }
@@ -130,8 +142,27 @@ async function init() {
   }
 }
 
+// เปลี่ยนปีที่ dropdown -> โหลดรายเดือน+ยอดเทียบของปีนั้น (ยอดสรุปรายปีมีครบอยู่แล้ว)
+async function onYearChange() {
+  const sel = document.getElementById('kpiYearSel');
+  const year = Number(sel.value);
+  sel.disabled = true;
+  try {
+    REPORT = await loadReport(year);
+    CONFIG = REPORT.config;
+    YEARS = REPORT.years.map(Number);
+    sel.value = REPORT.year;   // ยึดปีที่ได้ข้อมูลมาจริง กัน dropdown กับข้อมูลไม่ตรงกัน
+    renderKpis();
+    renderMonthlyAll();
+  } catch (ex) {
+    alert('โหลดข้อมูลปี ' + year + ' ไม่สำเร็จ: ' + ex.message);
+  } finally {
+    sel.disabled = false;
+  }
+}
+
 function yearsInData() {
-  return [...new Set(DATA.map(d => Number(d.year)))].sort((a, b) => a - b);
+  return YEARS.slice().sort((a, b) => a - b);
 }
 
 function valueFor(category, metric, year) {
@@ -144,36 +175,20 @@ function valueFor(category, metric, year) {
     if (num === null) return null;
     return num / ((den || 1) * div);
   }
-  const rows = DATA.filter(d => d.category === category && d.metric === metric && Number(d.year) === year);
-  const monthly = rows.filter(r => Number(r.month) > 0);
-  if (monthly.length) {
-    const vals = monthly.map(r => Number(r.value));
-    return cfg.calc_type === 'average' ? vals.reduce((a, b) => a + b, 0) / vals.length : vals.reduce((a, b) => a + b, 0);
-  }
-  const yearly = rows.find(r => Number(r.month) === 0);
-  return yearly ? Number(yearly.value) : null;
-}
-
-function monthsPresent(category, metric, year) {
-  return [...new Set(DATA.filter(d => d.category === category && d.metric === metric && Number(d.year) === year && Number(d.month) > 0).map(d => Number(d.month)))];
-}
-
-function periodValue(category, metric, year, months) {
-  const cfg = CONFIG.find(c => c.category === category && c.metric === metric);
-  const rows = DATA.filter(d => d.category === category && d.metric === metric && Number(d.year) === year && months.includes(Number(d.month)));
-  if (!rows.length) return null;
-  const vals = rows.map(r => Number(r.value));
-  return cfg.calc_type === 'average' ? vals.reduce((a, b) => a + b, 0) / vals.length : vals.reduce((a, b) => a + b, 0);
+  const v = REPORT.yearly[category + '|' + metric + '|' + year];
+  return (v === undefined || v === null) ? null : Number(v);
 }
 
 function yoyCompare(category, metric, year) {
-  const months = monthsPresent(category, metric, year);
   const curVal = valueFor(category, metric, year);
   if (curVal === null) return null;
+  const base = category + '|' + metric;
+  const n = Number(REPORT.monthsCount[base]) || 0;
   let prevVal, label;
-  if (months.length) {
-    prevVal = periodValue(category, metric, year - 1, months);
-    label = `${months.length} เดือนแรก เทียบปีก่อน`;
+  if (n) {
+    const p = REPORT.yoyPrev[base];
+    prevVal = (p === undefined || p === null) ? null : Number(p);
+    label = `${n} เดือนแรก เทียบปีก่อน`;
   } else {
     prevVal = valueFor(category, metric, year - 1);
     label = 'เทียบปีก่อน (ทั้งปี)';
@@ -210,10 +225,8 @@ function render() {
   const categories = [...new Set(CONFIG.map(c => c.category))];
 
   const yearSel = document.getElementById('kpiYearSel');
-  const latestYear = years[years.length - 1];
-  const prevSelected = yearSel.value;
   yearSel.innerHTML = years.slice().reverse().map(y => `<option value="${y}">${y}</option>`).join('');
-  yearSel.value = years.includes(Number(prevSelected)) ? prevSelected : latestYear;
+  yearSel.value = REPORT.year;      // ปีที่เซิร์ฟเวอร์ส่งข้อมูลมาให้จริง
   renderKpis();
 
   const container = document.getElementById('reportCategories');
@@ -246,6 +259,7 @@ function render() {
   renderMonthlyAll();
 }
 
+// year รับไว้เพื่อความเข้ากันได้ — REPORT.monthly เก็บของปีที่เลือกอยู่แล้ว
 function monthlyRawValue(category, metric, year, month) {
   const cfg = CONFIG.find(c => c.category === category && c.metric === metric);
   if (!cfg) return null;
@@ -256,8 +270,9 @@ function monthlyRawValue(category, metric, year, month) {
     if (num === null) return null;
     return num / ((den || 1) * div);
   }
-  const row = DATA.find(d => d.category === category && d.metric === metric && Number(d.year) === year && Number(d.month) === month);
-  return row ? Number(row.value) : null;
+  if (Number(year) !== Number(REPORT.year)) return null;
+  const v = REPORT.monthly[category + '|' + metric + '|' + month];
+  return (v === undefined || v === null) ? null : Number(v);
 }
 
 function renderMonthlyAll() {

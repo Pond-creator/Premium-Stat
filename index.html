@@ -109,7 +109,6 @@
 
 <script src="config.js"></script>
 <script>
-if (AUTH.guard()) init();
 let CONFIG = [], YEARS = [], CHARTS = {};
 let REPORT = { yearly: {}, monthly: {}, yoyPrev: {}, monthsCount: {}, year: 0 };
 
@@ -405,6 +404,9 @@ async function saveUserForm() {
     refreshUserList();
   } catch (ex) { alert(ex.message); }
 }
+
+// เรียกท้ายสุดเสมอ — ต้องให้ const/let ทุกตัวข้างบนประกาศเสร็จก่อน init() จะเข้าถึงได้
+if (AUTH.guard()) init();
 </script>
 </body>
 </html>

@@ -83,27 +83,40 @@
 </main>
 <script src="config.js"></script>
 <script>
-if (AUTH.guard()) init();
-
-let CONFIG = [], DATA = [];
+let CONFIG = [], YEARS = [];
+let MONTHLY = {};          // 'หมวด|metric|เดือน' -> ค่า (ของปีที่เลือกอยู่)
 const MONTHS = MONTH_NAMES;
+const YEAR_CACHE = {};
+
+async function loadYear(year) {
+  if (YEAR_CACHE[year]) return YEAR_CACHE[year];
+  const res = await api('yearData', { year });
+  YEAR_CACHE[year] = res;
+  return res;
+}
+
+function applyYearData(res) {
+  CONFIG = res.config;
+  YEARS = res.years.map(Number);
+  MONTHLY = res.monthly || {};
+}
+
+function buildYearOptions(selected) {
+  const curYear = new Date().getFullYear();
+  const years = new Set(YEARS);
+  years.add(curYear);
+  const sel = document.getElementById('yearSel');
+  sel.innerHTML = [...years].sort((a, b) => b - a)
+    .map(y => `<option value="${y}">${y}${y === curYear ? ' (ปีนี้)' : ''}</option>`).join('');
+  sel.value = selected;
+}
 
 async function init() {
   try {
-    const boot = await api('bootstrap');
-    CONFIG = boot.config;
-    DATA = boot.data;
-    const years = new Set(DATA.map(d => Number(d.year)));
     const curYear = new Date().getFullYear();
-    years.add(curYear);
-    const sel = document.getElementById('yearSel');
-    [...years].sort((a, b) => b - a).forEach(y => {
-      const opt = document.createElement('option');
-      opt.value = y; opt.textContent = y + (y === curYear ? ' (ปีนี้)' : '');
-      sel.appendChild(opt);
-    });
-    sel.value = curYear;
-    sel.addEventListener('change', render);
+    applyYearData(await loadYear(curYear));
+    buildYearOptions(curYear);
+    document.getElementById('yearSel').addEventListener('change', onYearChange);
     document.getElementById('catList').innerHTML = [...new Set(CONFIG.map(c => c.category))]
       .map(c => `<option value="${c}">`).join('');
     document.getElementById('loadingBox').style.display = 'none';
@@ -115,8 +128,26 @@ async function init() {
   }
 }
 
+async function onYearChange() {
+  const sel = document.getElementById('yearSel');
+  const year = Number(sel.value);
+  const statusEl = document.getElementById('statusMsg');
+  sel.disabled = true;
+  statusEl.style.color = '';
+  statusEl.textContent = 'กำลังโหลดปี ' + year + '...';
+  try {
+    applyYearData(await loadYear(year));
+    statusEl.textContent = '';
+    render();
+  } catch (ex) {
+    statusEl.style.color = '#dc2626';
+    statusEl.textContent = 'โหลดปี ' + year + ' ไม่สำเร็จ: ' + ex.message;
+  } finally {
+    sel.disabled = false;
+  }
+}
+
 function render() {
-  const year = Number(document.getElementById('yearSel').value);
   const inputMetrics = CONFIG.filter(c => c.calc_type !== 'ratio');
   const byCat = {};
   inputMetrics.forEach(c => { (byCat[c.category] = byCat[c.category] || []).push(c); });
@@ -131,8 +162,8 @@ function render() {
     metrics.forEach(m => {
       html += `<tr><td>${m.metric}</td>`;
       for (let mo = 1; mo <= 12; mo++) {
-        const existing = DATA.find(d => Number(d.year) === year && Number(d.month) === mo && d.category === cat && d.metric === m.metric);
-        const val = existing ? existing.value : '';
+        const v = MONTHLY[cat + '|' + m.metric + '|' + mo];
+        const val = (v === undefined || v === null) ? '' : v;
         html += `<td><input type="number" step="any" data-cat="${cat}" data-metric="${m.metric}" data-month="${mo}" value="${val}"></td>`;
       }
       html += '</tr>';
@@ -158,8 +189,8 @@ async function saveAll() {
       await api('saveMonth', { year, month: Number(month), entries: byMonth[month] });
     }
     statusEl.textContent = '✓ บันทึกแล้ว ' + new Date().toLocaleTimeString('th-TH');
-    const boot = await api('bootstrap');
-    CONFIG = boot.config; DATA = boot.data;
+    delete YEAR_CACHE[year];                  // ของที่จำไว้เก่าแล้ว ต้องดึงใหม่
+    applyYearData(await loadYear(year));
   } catch (ex) {
     statusEl.style.color = '#dc2626';
     statusEl.textContent = 'เกิดข้อผิดพลาด: ' + ex.message;
@@ -173,8 +204,9 @@ async function addMetric() {
   if (!category || !metric) return alert('กรอกชื่อหมวดหมู่และ metric ให้ครบ');
   try {
     await api('addMetric', { category, metric, calc_type });
-    const boot = await api('bootstrap');
-    CONFIG = boot.config; DATA = boot.data;
+    const year = Number(document.getElementById('yearSel').value);
+    delete YEAR_CACHE[year];                  // Config เปลี่ยน ต้องดึงใหม่
+    applyYearData(await loadYear(year));
     document.getElementById('catList').innerHTML = [...new Set(CONFIG.map(c => c.category))]
       .map(c => `<option value="${c}">`).join('');
     document.getElementById('newCategory').value = '';
@@ -184,6 +216,9 @@ async function addMetric() {
     alert('เกิดข้อผิดพลาด: ' + ex.message);
   }
 }
+
+// เรียกท้ายสุดเสมอ — ต้องให้ const/let ทุกตัวข้างบนประกาศเสร็จก่อน init() จะเข้าถึงได้
+if (AUTH.guard()) init();
 </script>
 </body>
 </html>

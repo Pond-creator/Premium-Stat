@@ -28,13 +28,34 @@ const AUTH = {
   }
 };
 
+// Google Apps Script's /exec endpoint occasionally returns an HTML error page
+// instead of JSON (transient Google-side redirect flakiness). Retry a few
+// times with backoff before giving up, so users don't see a raw parse error.
+async function fetchJsonWithRetry(url, options, retries = 3, delayMs = 700) {
+  let lastErr;
+  for (let i = 0; i < retries; i++) {
+    try {
+      const res = await fetch(url, options);
+      const text = await res.text();
+      try {
+        return JSON.parse(text);
+      } catch (parseErr) {
+        throw new Error('เซิร์ฟเวอร์ตอบกลับไม่ถูกต้อง (Google หน่วงชั่วคราว)');
+      }
+    } catch (ex) {
+      lastErr = ex;
+      if (i < retries - 1) await new Promise(r => setTimeout(r, delayMs * (i + 1)));
+    }
+  }
+  throw lastErr;
+}
+
 async function api(action, payload) {
   const body = new URLSearchParams();
   body.set('action', action);
   body.set('token', AUTH.getToken() || '');
   if (payload !== undefined) body.set('payload', JSON.stringify(payload));
-  const res = await fetch(API_URL, { method: 'POST', body });
-  const data = await res.json();
+  const data = await fetchJsonWithRetry(API_URL, { method: 'POST', body });
   if (data.needLogin) {
     AUTH.clear();
     location.href = 'login.html';
@@ -48,8 +69,7 @@ async function apiGet(params) {
   const url = new URL(API_URL);
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
   url.searchParams.set('token', AUTH.getToken() || '');
-  const res = await fetch(url);
-  const data = await res.json();
+  const data = await fetchJsonWithRetry(url);
   if (data.needLogin) {
     AUTH.clear();
     location.href = 'login.html';

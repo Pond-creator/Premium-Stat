@@ -63,8 +63,7 @@
 <script>
 (async () => {
   try {
-    const res = await fetch(API_URL + '?action=setupStatus');
-    const data = await res.json();
+    const data = await fetchJsonWithRetry(API_URL + '?action=setupStatus');
     if (data.ok && data.needed) document.getElementById('setupLinkWrap').style.display = '';
   } catch (ex) { /* keep hidden if status check fails */ }
 })();
@@ -89,8 +88,7 @@ document.getElementById('setupForm').addEventListener('submit', async (e) => {
       name: document.getElementById('setupName').value.trim(),
       password: document.getElementById('setupPassword').value
     }));
-    const res = await fetch(API_URL, { method: 'POST', body });
-    const data = await res.json();
+    const data = await fetchJsonWithRetry(API_URL, { method: 'POST', body });
     if (!data.ok) throw new Error(data.error || 'สร้างผู้ดูแลระบบไม่สำเร็จ');
     alert('สร้างผู้ดูแลระบบสำเร็จ กรุณาเข้าสู่ระบบ');
     document.getElementById('setupForm').style.display = 'none';
@@ -114,8 +112,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     body.set('action', 'login');
     body.set('username', document.getElementById('username').value.trim());
     body.set('password', document.getElementById('password').value);
-    const res = await fetch(API_URL, { method: 'POST', body });
-    const data = await res.json();
+    const data = await fetchJsonWithRetry(API_URL, { method: 'POST', body });
     if (!data.ok) throw new Error(data.error || 'เข้าสู่ระบบไม่สำเร็จ');
     AUTH.setSession(data.token, data.role, data.name);
     location.href = 'index.html';

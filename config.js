@@ -81,6 +81,29 @@ async function apiGet(params) {
 
 const MONTH_NAMES = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 
+/**
+ * ตัวเลข % จำลองระหว่างรอโหลด (ไม่ใช่ % จริงเพราะเป็นแค่ 1 คำขอ แบ่งขั้นไม่ได้)
+ * วิ่งเร็วตอนแรกแล้วค่อยๆ ช้าลง ค้างที่ 90% รอผลจริง แล้วค่อยกระโดดไป 100%
+ * ใช้: const p = startFakeProgress(el); ... p.finish(); หรือ p.stop() ตอน error
+ */
+function startFakeProgress(el) {
+  let pct = 0;
+  const timer = setInterval(() => {
+    pct += (90 - pct) * 0.08 + 0.3;
+    if (pct > 89) pct = 89;
+    el.textContent = Math.floor(pct) + '%';
+  }, 150);
+  return {
+    finish() {
+      clearInterval(timer);
+      el.textContent = '100%';
+    },
+    stop() {
+      clearInterval(timer);
+    }
+  };
+}
+
 function exportXLSX(filename, tableEl) {
   const wb = XLSX.utils.table_to_book(tableEl, { sheet: 'Report' });
   XLSX.writeFile(wb, filename);

@@ -35,7 +35,9 @@
   .add-metric summary { cursor: pointer; color: #6366f1; font-size: 13px; }
   .add-metric-form { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
   .add-metric-form input, .add-metric-form select { padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; }
-  .loading-box { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 100px 20px; color: #64748b; font-size: 14px; }
+  .loading-box { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 100px 20px; color: #64748b; font-size: 14px; }
+  .loading-box .spinner { margin-bottom: 10px; }
+  .loading-pct { font-size: 22px; font-weight: 700; color: #6366f1; margin: 0; font-variant-numeric: tabular-nums; }
   .spinner { width: 36px; height: 36px; border: 3px solid #e0e7ff; border-top-color: #6366f1; border-radius: 50%; animation: spin .8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 </style>
@@ -52,6 +54,7 @@
 <main>
   <div class="loading-box" id="loadingBox">
     <div class="spinner"></div>
+    <p class="loading-pct" id="loadingPct">0%</p>
     <p id="loadingText">กำลังโหลดข้อมูล...</p>
   </div>
   <div id="contentWrap" style="display:none;">
@@ -112,6 +115,7 @@ function buildYearOptions(selected) {
 }
 
 async function init() {
+  const progress = startFakeProgress(document.getElementById('loadingPct'));
   try {
     const curYear = new Date().getFullYear();
     applyYearData(await loadYear(curYear));
@@ -119,10 +123,12 @@ async function init() {
     document.getElementById('yearSel').addEventListener('change', onYearChange);
     document.getElementById('catList').innerHTML = [...new Set(CONFIG.map(c => c.category))]
       .map(c => `<option value="${c}">`).join('');
+    progress.finish();
     document.getElementById('loadingBox').style.display = 'none';
     document.getElementById('contentWrap').style.display = '';
     render();
   } catch (ex) {
+    progress.stop();
     document.getElementById('loadingText').innerHTML =
       `โหลดข้อมูลไม่สำเร็จ: ${ex.message}<br><button class="btn" style="margin-top:12px" onclick="location.reload()">ลองใหม่</button>`;
   }
